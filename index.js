@@ -433,7 +433,52 @@ app.get('/follow/following/:user', async(req, res) => {
     }
 })
 
+app.get('/message/:contact_id', async(req,res)=>{
+    if(req.session.uid !=null){
+        
+    }else{
+        res.status(400).send(null)
+    }
+})
 
+app.post('/message', async(req,res) => {
+    const {recipient_id, content} = req.body
+    if(req.session.uid != null){
+        
+    }else{
+        res.status(400).send(null)
+    }
+
+})
+
+app.get('/contacts', async(req,res) => {
+    if(req.session.uid != null){
+        const contactsId = (await pool.query('SELECT contact_id FROM contacts WHERE user_id=$1',[req.session.uid])).rows
+        const returnArray = []
+        for(let i = 0;i<contactsId.length;i++){
+            const contact = (await pool.query('SELECT name, username FROM users WHERE user_id=$1',[contactsId[i]])).rows[0]
+            returnArray.push(contact)
+        }
+        res.status(200).send(returnArray)
+    }else{
+        res.status(400).send(null);
+    }
+})
+
+app.post('/contacts', async(req,res) => {
+    if(req.session.uid != null){
+        const { contact_id } = req.body
+        await pool.query('INSERT INTO contacts(user_id,contact_id) VALUES($1,$2)',[rqe.session.uid, contact_id])
+        const contact = (await pool.query('SELECT name, username FROM users WHERE user_id=$1',[contact_id])).rows[0]
+        res.status(200).send(contact)
+    }else{
+        res.status(400).send(null)
+    }
+})
+
+app.delete('/contacts', async(req,res) =>{
+    
+})
 
 
 app.listen(PORT, () => {
@@ -526,6 +571,18 @@ async function useIsFollow(uid, follower_id){
         id: SERIAL PRIMARY KEY,
         user_id INTEGER NOT NULL,
         tweet_id INTEGER NOT NULL
+
+    messages:
+        id: SERIAL PRIMARY KEY,
+        sender_id: INTEGER NOT NULL,
+        recipient_id: INTEGER NOT NULL,
+        content: TEXT,
+        date: TIMESTAMP
+
+    contacts:
+        id: SERIAL PRIMARY KEY,
+        user_id: INTEGER NOT NULL,
+        contact_id: INTEGER NOT NULL,
 
 
 
