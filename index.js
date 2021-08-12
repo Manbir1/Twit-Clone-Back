@@ -435,7 +435,16 @@ app.get('/follow/following/:user', async(req, res) => {
 
 app.get('/message/:contact_id', async(req,res)=>{
     if(req.session.uid !=null){
-        
+        const {contact_id} = req.params
+        const messages = (await pool.query('SELECT * FROM messages WHERE (sender_id =$1 AND recipient_id=$2) OR (sender_id =$2 AND recipient_id=$1)',[req.session.uid,contact_id])).rows
+        for(let i = 0;i<messages.length;i++){
+            if(messages[i].sender_id == req.session.uid){
+                messages[i].sender = true
+            }else{
+                messages[i].sender = false
+            }
+        }
+        res.status(200).send(messages)
     }else{
         res.status(400).send(null)
     }
@@ -444,7 +453,8 @@ app.get('/message/:contact_id', async(req,res)=>{
 app.post('/message', async(req,res) => {
     const {recipient_id, content} = req.body
     if(req.session.uid != null){
-        
+        await pool.query('INSERT INTO messages(sender_id,recipient_id,content,date) VALUES($1,$2,$3,CURRENT_TIMESTAMP)',[req.session.uid,recipient_id,content])
+        res.status(200).send({created: true})
     }else{
         res.status(400).send(null)
     }
@@ -456,7 +466,7 @@ app.get('/contacts', async(req,res) => {
         const contactsId = (await pool.query('SELECT contact_id FROM contacts WHERE user_id=$1',[req.session.uid])).rows
         const returnArray = []
         for(let i = 0;i<contactsId.length;i++){
-            const contact = (await pool.query('SELECT name, username FROM users WHERE user_id=$1',[contactsId[i]])).rows[0]
+            const contact = (await pool.query('SELECT name, username, id FROM users WHERE id=$1',[contactsId[i].contact_id])).rows[0]
             returnArray.push(contact)
         }
         res.status(200).send(returnArray)
@@ -467,10 +477,19 @@ app.get('/contacts', async(req,res) => {
 
 app.post('/contacts', async(req,res) => {
     if(req.session.uid != null){
-        const { contact_id } = req.body
-        await pool.query('INSERT INTO contacts(user_id,contact_id) VALUES($1,$2)',[rqe.session.uid, contact_id])
-        const contact = (await pool.query('SELECT name, username FROM users WHERE user_id=$1',[contact_id])).rows[0]
-        res.status(200).send(contact)
+        const { contact_username } = req.body
+        try{
+            const contact_id = await getUID(contact_username)
+            if(contact_id == null){
+                throw Error('User does not exist')
+            }
+            await pool.query('INSERT INTO contacts(user_id,contact_id) VALUES($1,$2)',[req.session.uid, contact_id])
+            const contact = (await pool.query('SELECT name, username FROM users WHERE id=$1',[contact_id])).rows[0]
+            res.status(200).send({...contact, id: contact_id})
+        } catch (e){
+            console.log(e)
+            res.status(400).send(null)
+        }
     }else{
         res.status(400).send(null)
     }
@@ -520,7 +539,11 @@ async function getUsersTweets(uid){
 
 async function getUID(username) {
     const { rows } = await pool.query('SELECT id FROM users WHERE username=$1',[username])
-    return rows[0].id
+    if(rows.length>0){
+        return rows[0].id
+    }else{
+        return null
+    }
 }
 
 async function getSubInfoTweet(id){
